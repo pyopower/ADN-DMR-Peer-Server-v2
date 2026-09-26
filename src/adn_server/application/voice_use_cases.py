@@ -33,6 +33,7 @@ from typing import Any, Callable
 
 from ..domain import HBPF_SLT_VHEAD, HBPF_SLT_VTERM, bytes_3, bytes_4
 from .echo_report import LANG_DIRS, EchoReportSession, language_for, report_words
+from .plugins.domain.events import EchoReport
 from .ports import VoiceProvider
 from .routing.helpers import slot_voice_held_by_other_stream
 from .server_voice import server_voice_rf_src_bytes
@@ -73,6 +74,11 @@ class VoiceUseCases:
         self._get_protocols = get_protocols
         self._call_from_reactor = call_from_reactor
         self._audio_path = audio_path or ""
+        self._echo_report_listener: Callable[[Any], None] | None = None
+
+    def set_echo_report_listener(self, listener: Callable[[Any], None] | None) -> None:
+        """Called (from the playback thread) with an ``EchoReport`` event after each report."""
+        self._echo_report_listener = listener
 
     def _server_source_id(self) -> bytes:
         return server_voice_rf_src_bytes(self._config)
@@ -195,6 +201,12 @@ class VoiceUseCases:
             return
         _pkt_count = self.play_on_slot(protocol, system, speech, _source_id, bytes_3(9))
         logger.info("(%s) Echo report playback complete (%d packets)", system, _pkt_count)
+        if self._echo_report_listener is not None:
+            self._echo_report_listener(EchoReport(
+                src_id=session.rf_src, system=system, ber_percent=session.ber_percent,
+                rssi_dbm=session.rssi_dbm, loss_percent=session.loss_percent, lost=session.lost,
+                packets=session.packets + session.lost, language=lang,
+            ))
 
     def disconnected_voice(self, system: str) -> None:
         """Send 'disconnected' / 'linked to reflector' voice (legacy disconnectedVoice). Run from thread."""

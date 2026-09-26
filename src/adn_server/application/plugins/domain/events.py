@@ -130,3 +130,20 @@ class UnitDataEnd:
     context: CallLegContext
     duration_s: float
     packet_count: int = 0
+
+
+@dataclass(frozen=True)
+class EchoReport:
+    """An echo with signal report (private call to 9999) has been played back.
+
+    ``ber_percent`` / ``rssi_dbm`` are ``None`` when the hotspot sent no RF data (network clients).
+    """
+
+    src_id: int
+    system: str
+    ber_percent: float | None
+    rssi_dbm: int | None
+    loss_percent: float
+    lost: int
+    packets: int
+    language: str

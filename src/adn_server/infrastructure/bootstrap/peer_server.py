@@ -433,6 +433,8 @@ def run_peer_server(
 
     plugin_bus = PluginBus()
     plugin_bus.set_call_later(reactor.callLater)
+    # Echo report results (9999) reach plugins (e.g. to send them by SMS); emitted on the reactor.
+    voice_use_cases.set_echo_report_listener(lambda event: reactor.callFromThread(plugin_bus.emit, event))
     server_ctx = ServerContext(
         config=config,
         project_root=project_root,

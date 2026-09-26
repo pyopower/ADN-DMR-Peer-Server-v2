@@ -141,6 +141,21 @@ def test_playback_is_echo_then_report_on_tg9_from_the_server_id() -> None:
     play.assert_called_once()
 
 
+def test_report_event_for_plugins() -> None:
+    scenario, master = voice_master_scenario()
+    uc = VoiceUseCases(_Provider(True), scenario.config, get_protocols=lambda: {"MASTER-A": master},
+                       call_from_reactor=lambda fn, *a: fn(*a), audio_path="/audio")
+    events = []
+    uc.set_echo_report_listener(events.append)
+    s = _session_with(2, 55)
+    with patch("adn_server.application.voice_use_cases.time.sleep"), \
+         patch.object(VoiceUseCases, "play_on_slot", return_value=3):
+        uc.play_echo_report("MASTER-A", s)
+    (ev,) = events
+    assert (ev.src_id, ev.rssi_dbm, ev.language, ev.packets) == (2130035, -55, "es", 4)
+    assert ev.ber_percent == s.ber_percent
+
+
 def test_missing_clips_play_the_echo_alone() -> None:
     provider, play = _play(with_clips=False)
     (_, _, phrase), = provider.phrases
