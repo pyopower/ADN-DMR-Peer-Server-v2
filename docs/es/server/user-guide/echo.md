@@ -61,3 +61,22 @@ y [Proxy hotspot — Comportamiento con varios hotspots](hotspot-proxy.md#compor
 ## Documentación
 
 Esta página es el resumen incluido en el repositorio; amplía las notas de despliegue localmente según necesites.
+
+## Eco con informe de señal (llamada privada al 9999)
+
+Una **llamada privada al 9999** funciona como el loro y después añade un breve informe hablado
+para saber dónde está un problema:
+
+- **Tasa de error de bits** que mide tu hotspot en tu RF (radio, antena, modulación);
+- **Señal**: RSSI en tu hotspot, en dBm;
+- **Pérdida de paquetes** entre tu hotspot y el master (tu conexión a internet).
+
+Los hotspots y aplicaciones que no miden RF (DVSwitch, clientes de red) no envían BER/RSSI: el
+informe lo indica y solo da las pérdidas. No se mide nada en el camino de vuelta a tu radio.
+
+La reproducción y el informe llegan por el **TG 9, TS2**, desde el ID de voz del servidor
+(`VOICE.DMR_ID`, por defecto 1000001), y solo al hotspot que llamó, como las locuciones a la
+carta. El idioma sigue al país de tu DMR ID (español en los países hispanohablantes, inglés en el
+resto). Las frases son `Audio/es_ES/er_*.ambe` y `Audio/en_GB/er_*.ambe`, hechas con
+`tools/echo_report_clips.py` (TTS Piper y un AMBEserver); para añadir un idioma basta con darle
+sus palabras en `clip_texts()` y generar sus frases. El TG **9990** no cambia.

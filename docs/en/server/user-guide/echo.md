@@ -60,3 +60,22 @@ and [Hotspot proxy — Multi-hotspot behaviour](hotspot-proxy.md#multi-hotspot-b
 ## Documentation
 
 This page is the summary shipped with the repository; extend your deployment notes locally as needed.
+
+## Echo with signal report (private call to 9999)
+
+A **private call to 9999** works like the parrot and then adds a short spoken report, to tell
+where a problem is:
+
+- **Bit error rate** measured by your hotspot on your RF (your radio, antenna, modulation);
+- **Signal**: RSSI at your hotspot, in dBm;
+- **Packet loss** between your hotspot and the master (your internet link).
+
+Hotspots and apps that don't measure RF (DVSwitch, network clients) send no BER/RSSI: the report
+says so and gives only the loss. Nothing is measured on the way back to your radio.
+
+The playback and the report come on **TG 9, TS2**, from the server voice ID (`VOICE.DMR_ID`,
+default 1000001), and only to the hotspot that called, like the on-demand prompts. The language
+follows the country of your DMR ID (Spanish for Spanish-speaking countries, English otherwise).
+The clips are `Audio/es_ES/er_*.ambe` and `Audio/en_GB/er_*.ambe`, made with
+`tools/echo_report_clips.py` (Piper TTS and an AMBEserver); a language is added by giving
+`clip_texts()` its words and generating its clips. TG **9990** is unchanged.

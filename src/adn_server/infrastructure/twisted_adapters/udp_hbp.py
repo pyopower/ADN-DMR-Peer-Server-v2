@@ -75,6 +75,7 @@ from ...application.routing.peer_downlink_index import (
     count_connected_peers,
     invalidate_peer_options_cache,
 )
+from ...application.echo_report import ECHO_REPORT_ID, EchoReportSession
 from ...application.server_voice import all_server_voice_ids
 from ...domain import bytes_3, bytes_4, int_id
 from ...domain.dmr import decode
@@ -120,6 +121,8 @@ from ..hbp_constants import (
     HBPF_DATA_SYNC,
     HBPF_SLT_VHEAD,
     HBPF_SLT_VTERM,
+    HBPF_VOICE,
+    HBPF_VOICE_SYNC,
     MSTC,
     MSTCL,
     MSTN,
@@ -229,6 +232,7 @@ class HBPProtocol(DatagramProtocol):
         get_user_password_callback: Callable[[int], bytes | None] | None = None,
         on_play_file_request: Callable[[str, str], None] | None = None,
         on_handle_recording: Callable[..., None] | None = None,
+        on_echo_report: Callable[[str, EchoReportSession], None] | None = None,
         on_in_band_signalling: Callable[[str, int, bytes, float], None] | None = None,
         on_options_received: Callable[..., None] | None = None,
         on_deactivate_dynamic_relays: Callable[[str], None] | None = None,
@@ -253,6 +257,9 @@ class HBPProtocol(DatagramProtocol):
         self._get_user_password = get_user_password_callback if get_user_password_callback is not None else get_user_password
         self._on_play_file_request = on_play_file_request
         self._on_handle_recording = on_handle_recording
+        # Echo with signal report (private call to 9999): one recording per slot.
+        self._on_echo_report = on_echo_report
+        self._echo_report_sessions: dict[int, EchoReportSession] = {}
         self._on_in_band_signalling = on_in_band_signalling
         self._on_options_received = on_options_received
         self._on_deactivate_dynamic_relays = on_deactivate_dynamic_relays
@@ -504,6 +511,26 @@ class HBPProtocol(DatagramProtocol):
         if d_peer_id in self._peers:
             return (d_peer_id,)
         return ()
+
+    def _echo_report_packet(
+        self, slot: int, stream_id: bytes, rf_src: bytes, peer_id: bytes, seq: int,
+        frame_type: int, dtype_vseq: int, data: bytes,
+    ) -> None:
+        """Record a private call to 9999; on its terminator hand it to the echo report (thread)."""
+        end = frame_type == HBPF_DATA_SYNC and dtype_vseq == HBPF_SLT_VTERM
+        session = self._echo_report_sessions.get(slot)
+        if session is None or session.stream_id != stream_id:
+            if end:
+                return
+            session = self._echo_report_sessions[slot] = EchoReportSession(stream_id, int_id(rf_src), peer_id)
+        is_voice = frame_type in (HBPF_VOICE, HBPF_VOICE_SYNC)
+        ber = data[53] if is_voice and len(data) > 54 else 0
+        rssi = data[54] if is_voice and len(data) > 54 else 0
+        session.add_packet(seq, data[20:53], is_voice, ber, rssi)
+        if end:
+            del self._echo_report_sessions[slot]
+            if session.bursts:
+                reactor.callInThread(self._on_echo_report, self._system, session)
 
     def _purge_sub_map_for_peer(self, peer_id: bytes) -> None:
         """Drop every SUB_MAP entry last heard on ``peer_id``.
@@ -1577,7 +1604,9 @@ class HBPProtocol(DatagramProtocol):
                 if _accepted and self._on_handle_recording and _voice.get("RECORDING_ENABLED") and int_id(_dst_id) == _voice.get("RECORDING_TG") and _slot == _voice.get("RECORDING_TIMESLOT", 2):
                     dmrpkt = _data[20:53] if len(_data) >= 53 else _data[20:]
                     self._on_handle_recording(dmrpkt, _frame_type, _dtype_vseq, _stream_id, pkt_time, _rf_src, _int_dst_id, _slot)
-                if (
+                if _call_type == "unit" and not _unit_data and _int_dst_id == ECHO_REPORT_ID and self._on_echo_report:
+                    self._echo_report_packet(_slot, _stream_id, _rf_src, _peer_id, _seq, _frame_type, _dtype_vseq, _data)
+                elif (
                     _call_type == "unit"
                     and not _unit_data
                     and _frame_type == HBPF_DATA_SYNC
@@ -2535,6 +2564,7 @@ def HBPProtocolFactory(
     get_user_password_callback: Callable[[int], bytes | None] | None = None,
     on_play_file_request: Callable[[str, str], None] | None = None,
     on_handle_recording: Callable[..., None] | None = None,
+    on_echo_report: Callable[[str, EchoReportSession], None] | None = None,
     on_in_band_signalling: Callable[[str, int, bytes, float], None] | None = None,
     on_options_received: Callable[..., None] | None = None,
     on_deactivate_dynamic_relays: Callable[[str], None] | None = None,
@@ -2559,6 +2589,7 @@ def HBPProtocolFactory(
         get_user_password_callback=get_user_password_callback,
         on_play_file_request=on_play_file_request,
         on_handle_recording=on_handle_recording,
+        on_echo_report=on_echo_report,
         on_in_band_signalling=on_in_band_signalling,
         on_options_received=on_options_received,
         on_deactivate_dynamic_relays=on_deactivate_dynamic_relays,

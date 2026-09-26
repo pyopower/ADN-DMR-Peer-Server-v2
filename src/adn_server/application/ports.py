@@ -200,6 +200,10 @@ class VoiceProvider(ABC):
         """Read one AMBE file (e.g. ondemand/{file_number}.ambe). Legacy readSingleFile for playFileOnRequest."""
         return []
 
+    def pairs_from_bytes(self, data: bytes) -> list:
+        """AMBE bytes in the .ambe file format (27 per voice burst) as the burst pairs pkt_gen takes."""
+        return []
+
 
 class SecurityDownloader(ABC):
     """Periodic security downloads (passwords, encryption). Legacy security_downloader."""

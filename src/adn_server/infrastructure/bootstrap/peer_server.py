@@ -690,6 +690,7 @@ def run_peer_server(
             get_user_password_callback=user_passwords_loader.get_user_password,
             on_play_file_request=voice_use_cases.play_file_on_request,
             on_handle_recording=recording_handler.handle_recording,
+            on_echo_report=voice_use_cases.play_echo_report,
             on_in_band_signalling=routing_use_cases.apply_in_band_signalling,
             on_options_received=routing_use_cases.options_config_for_system,
             on_deactivate_dynamic_relays=routing_use_cases.deactivate_all_dynamic_relays,

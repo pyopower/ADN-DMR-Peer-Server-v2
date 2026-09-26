@@ -178,6 +178,12 @@ class DefaultVoiceProvider(VoiceProvider):
         """Generate HBP voice packets for phrase. Legacy mk_voice.pkt_gen."""
         return _pkt_gen(rf_src, dst_id, peer, slot, phrase)
 
+    def pairs_from_bytes(self, data: bytes) -> list:
+        """Recorded AMBE (27 bytes per voice burst, the .ambe file format) as burst pairs."""
+        bits = bitarray(endian="big")
+        bits.frombytes(data)
+        return ReadAMBE("", ".")._pairs_from_bitarray(bits)
+
 
 class StubVoiceProvider(VoiceProvider):
     """Stub: get_ambe_words returns empty; pkt_gen returns empty iterator; read_single_file returns []."""

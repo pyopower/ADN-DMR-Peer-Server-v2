@@ -32,6 +32,7 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 from ..domain import HBPF_SLT_VHEAD, HBPF_SLT_VTERM, bytes_3, bytes_4
+from .echo_report import LANG_DIRS, EchoReportSession, language_for, report_words
 from .ports import VoiceProvider
 from .routing.helpers import slot_voice_held_by_other_stream
 from .server_voice import server_voice_rf_src_bytes
@@ -165,6 +166,35 @@ class VoiceUseCases:
             return
         _pkt_count = self.play_on_slot(protocol, system, speech, _source_id, bytes_3(9))
         logger.info("(%s) On-demand playback complete: %s (%d packets)", system, file_number, _pkt_count)
+
+    def play_echo_report(self, system: str, session: "EchoReportSession") -> None:
+        """Echo with signal report (private call to 9999): the caller's recording, then the spoken
+        report, on TG 9 TS2 from the server voice ID, to the calling hotspot only (like on-demand
+        files). Run from a thread."""
+        if not self._get_protocols or not self._call_from_reactor or not self._audio_path:
+            return
+        protocol = self._get_protocols().get(system)
+        if not protocol or not getattr(protocol, "STATUS", None):
+            return
+        lang = language_for(session.rf_src)
+        lang_dir = LANG_DIRS[lang]
+        words = self.get_ambe_words(lang_dir, self._audio_path).get(lang_dir, {})
+        silence = words.get("silence") or []
+        report = report_words(session, lang)
+        missing = sorted({w for w in report if w not in words})
+        _say = [self._voice.pairs_from_bytes(session.recording()), silence, silence]
+        if missing:
+            logger.warning("(%s) Echo report clips missing in %s: %s (playing the echo only)", system, lang_dir, missing)
+        else:
+            _say += [words[w] for w in report]
+        logger.info("(%s) Echo report for %s: %s (%s)", system, session.rf_src, session.summary(), lang)
+        time.sleep(1)
+        _source_id = self._server_source_id()
+        speech = self.pkt_gen(_source_id, bytes_3(9), bytes_4(9), 1, _say)
+        if not protocol.STATUS.get(2):
+            return
+        _pkt_count = self.play_on_slot(protocol, system, speech, _source_id, bytes_3(9))
+        logger.info("(%s) Echo report playback complete (%d packets)", system, _pkt_count)
 
     def disconnected_voice(self, system: str) -> None:
         """Send 'disconnected' / 'linked to reflector' voice (legacy disconnectedVoice). Run from thread."""
