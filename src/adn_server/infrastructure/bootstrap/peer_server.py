@@ -83,7 +83,10 @@ from adn_server.infrastructure.config_normalizer import (
 from adn_server.infrastructure.config_reload import BindSpec, reload_server_config
 from adn_server.infrastructure.logging_config import reopen_file_handlers
 from adn_server.infrastructure.persistence import PickleSubMapStore, SubMapSaver
-from adn_server.infrastructure.persistence.alias_loader import DefaultAliasLoader
+from adn_server.infrastructure.persistence.alias_loader import (
+    SERVICE_SUBSCRIBER_IDS,
+    DefaultAliasLoader,
+)
 from adn_server.infrastructure.persistence.database_config import database_settings
 from adn_server.infrastructure.persistence.dynamic_tg_repository import MysqlDynamicTgRepository
 from adn_server.infrastructure.persistence.keys_store import JsonKeysStore
@@ -279,8 +282,7 @@ def run_peer_server(
     peer_ids, subscriber_ids, talkgroup_ids, local_subscriber_ids, server_ids, checksums = (
         alias_loader.load_aliases(config)
     )
-    subscriber_ids[900999] = "D-APRS"
-    subscriber_ids[4294967295] = "SC"
+    subscriber_ids.update(SERVICE_SUBSCRIBER_IDS)
     config["_SUB_IDS"] = subscriber_ids
     config["_SUB_PROFILES"] = alias_loader.load_subscriber_profiles(config)
     config["_PEER_IDS"] = peer_ids
